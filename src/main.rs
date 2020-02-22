@@ -1,21 +1,44 @@
+#![allow(dead_code, unused_variables, unused_imports, unreachable_code)]
 use std::error::Error;
 
+use diesel::pg::PgConnection;
 use lambda_http::{lambda, Body, IntoResponse, Request, Response};
 use lambda_runtime::{error::HandlerError, Context};
+use once_cell::sync::OnceCell;
+use r2d2_diesel::ConnectionManager;
 use regex::Regex;
-use scryfall::api::{cards_search, single_card_image_with_fallback};
 use serde_json;
+use std::time::Duration;
 use telegram::{
     inbound::{MessageEntityType, TelegramUpdate},
     outbound::{InputMediaPhoto, ParseMode, SendMediaGroup, SendMessage, SendPhoto},
 };
 
 mod convert;
+mod db;
+mod platform;
 mod scryfall;
 mod telegram;
 
+static DB_POOL: OnceCell<r2d2::Pool<ConnectionManager<PgConnection>>> = OnceCell::new();
+
 fn main() -> Result<(), Box<dyn Error>> {
-    lambda!(my_handler);
+    let platform = platform::Platform::Local;
+
+    let postgres_uri = platform.get_database_config()?.as_diesel_uri();
+    let manager = ConnectionManager::<PgConnection>::new(postgres_uri);
+    let pool = r2d2::Pool::builder()
+        .connection_timeout(Duration::from_secs(1))
+        .build(manager)
+        .expect("Failed to create pool.");
+    DB_POOL
+        .set(pool)
+        .map_err(|_| "failed to initialise DB pool")?;
+
+    match platform {
+        platform::Platform::Lambda => lambda!(my_handler),
+        _ => unimplemented!(),
+    }
 
     Ok(())
 }
@@ -48,7 +71,8 @@ fn handle_inline_query(update: &TelegramUpdate) {
         return;
     }
 
-    let results = cards_search(&q.query, "name", 1).unwrap();
+    // let results = cards_search(&q.query, "name", 1).unwrap();
+    let results = unimplemented!();
     let response = convert::search_results_to_inline_query_response(q.id.clone(), &results);
     telegram::api::answer_inline_query(&response);
 }
@@ -123,7 +147,7 @@ fn handle_plaintext(update: &TelegramUpdate) {
 
     let results: Vec<String> = re
         .captures_iter(&msg_text)
-        .filter_map(|cap| single_card_image_with_fallback(cap.get(1).unwrap().as_str()))
+        .filter_map(|cap| unimplemented!())
         .collect();
 
     if results.len() == 0 {
