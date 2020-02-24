@@ -3,11 +3,12 @@ use std::error::Error;
 
 use diesel::pg::PgConnection;
 use lambda_http::{lambda, Body, IntoResponse, Request, Response};
-use lambda_runtime::{error::HandlerError, Context};
+use lambda_runtime::{error::{HandlerError, LambdaResultExt}, Context};
 use once_cell::sync::OnceCell;
 use r2d2_diesel::ConnectionManager;
 use regex::Regex;
 use serde_json;
+use snafu::{OptionExt, ResultExt, Snafu};
 use std::time::Duration;
 use telegram::{
     inbound::{MessageEntityType, TelegramUpdate},
@@ -17,7 +18,6 @@ use telegram::{
 mod convert;
 mod db;
 mod platform;
-mod scryfall;
 mod telegram;
 
 static DB_POOL: OnceCell<r2d2::Pool<ConnectionManager<PgConnection>>> = OnceCell::new();
@@ -54,7 +54,7 @@ fn my_handler(event: Request, _context: Context) -> Result<impl IntoResponse, Ha
     let update = maybe_update.expect("Unsupported content type of HTTP body.");
 
     if update.inline_query.is_some() {
-        handle_inline_query(&update);
+        handle_inline_query(&update); // todo handle error
     }
 
     if update.message.is_some() {
@@ -64,17 +64,35 @@ fn my_handler(event: Request, _context: Context) -> Result<impl IntoResponse, Ha
     Ok(Response::builder().status(200).body("").unwrap())
 }
 
-fn handle_inline_query(update: &TelegramUpdate) {
+fn handle_inline_query(update: &TelegramUpdate) -> Result<(), Box<dyn Error>> {
     let q = update.inline_query.as_ref().unwrap();
 
     if q.query.len() == 0 {
-        return;
+        return Ok(());
     }
 
-    // let results = cards_search(&q.query, "name", 1).unwrap();
-    let results = unimplemented!();
-    let response = convert::search_results_to_inline_query_response(q.id.clone(), &results);
+    let pool = DB_POOL.get().context(CouldNotGetPool {})?;
+    let conn = pool.get()?;
+
+    // let results = sticker_search(&q.query, "name", 1).unwrap();
+    // let results = unimplemented!();
+    let results = Vec::new();
+    let response = convert::search_results_to_inline_query_response(q.id.clone(), results);
     telegram::api::answer_inline_query(&response);
+    Ok(())
+}
+
+#[derive(Snafu)]
+enum HandleMessageError {
+    #[snafu(display("Failed to get the DB pool"))]
+    CouldNotGetPool,
+}
+
+// redirect to Display so main understands it
+impl std::fmt::Debug for HandleMessageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
 }
 
 fn handle_message(update: &TelegramUpdate) {
