@@ -2,13 +2,16 @@
 use std::error::Error;
 
 use diesel::pg::PgConnection;
+use failure::{Backtrace, Context as _, Fail, ResultExt};
 use lambda_http::{lambda, Body, IntoResponse, Request, Response};
-use lambda_runtime::{error::{HandlerError, LambdaResultExt}, Context};
+use lambda_runtime::{
+    error::{HandlerError, LambdaResultExt},
+    Context,
+};
 use once_cell::sync::OnceCell;
 use r2d2_diesel::ConnectionManager;
 use regex::Regex;
 use serde_json;
-use snafu::{OptionExt, ResultExt, Snafu};
 use std::time::Duration;
 use telegram::{
     inbound::{MessageEntityType, TelegramUpdate},
@@ -36,14 +39,30 @@ fn main() -> Result<(), Box<dyn Error>> {
         .map_err(|_| "failed to initialise DB pool")?;
 
     match platform {
-        platform::Platform::Lambda => lambda!(my_handler),
+        platform::Platform::Lambda => {
+            lambda!(|e, c| {
+                let as_err = process_event(e, c).map_err(failure::Error::from_boxed_compat);
+                as_err.handler_error()
+            })
+        }
         _ => unimplemented!(),
+        // _ => println!(
+        //     "{:?}",
+        //     DB_POOL
+        //         .get()?
+        //         .get()?
+        //         .build_transaction()
+        //         .read_only()
+        //         .serializable()
+        //         .deferrable()
+        //         .run(|| Ok(()))
+        // ),
     }
 
     Ok(())
 }
 
-fn my_handler(event: Request, _context: Context) -> Result<impl IntoResponse, HandlerError> {
+fn process_event(event: Request, _context: Context) -> Result<impl IntoResponse, Box<dyn Error + Send + Sync + 'static>> {
     let msg_body = event.into_body();
     println!("{:?}", msg_body);
 
@@ -64,15 +83,17 @@ fn my_handler(event: Request, _context: Context) -> Result<impl IntoResponse, Ha
     Ok(Response::builder().status(200).body("").unwrap())
 }
 
-fn handle_inline_query(update: &TelegramUpdate) -> Result<(), Box<dyn Error>> {
+fn handle_inline_query(update: &TelegramUpdate) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     let q = update.inline_query.as_ref().unwrap();
 
     if q.query.len() == 0 {
         return Ok(());
     }
 
-    let pool = DB_POOL.get().context(CouldNotGetPool {})?;
-    let conn = pool.get()?;
+    let pool = DB_POOL
+        .get()
+        .ok_or("oops")?;
+    let conn = pool.get();
 
     // let results = sticker_search(&q.query, "name", 1).unwrap();
     // let results = unimplemented!();
@@ -82,9 +103,9 @@ fn handle_inline_query(update: &TelegramUpdate) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-#[derive(Snafu)]
+#[derive(Fail)]
 enum HandleMessageError {
-    #[snafu(display("Failed to get the DB pool"))]
+    #[fail(display = "Failed to get the DB pool")]
     CouldNotGetPool,
 }
 
