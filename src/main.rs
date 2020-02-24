@@ -39,12 +39,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         .map_err(|_| "failed to initialise DB pool")?;
 
     match platform {
-        platform::Platform::Lambda => {
-            lambda!(|e, c| {
-                let as_err = process_event(e, c).map_err(failure::Error::from_boxed_compat);
-                as_err.handler_error()
-            })
-        }
+        platform::Platform::Lambda => lambda!(|e, c| process_event(e, c)
+            .map_err(|e| failure::Error::from_boxed_compat(e).compat())
+            .handler_error()),
         _ => unimplemented!(),
         // _ => println!(
         //     "{:?}",
@@ -62,7 +59,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn process_event(event: Request, _context: Context) -> Result<impl IntoResponse, Box<dyn Error + Send + Sync + 'static>> {
+fn process_event(
+    event: Request,
+    _context: Context,
+) -> Result<impl IntoResponse, Box<dyn Error + Send + Sync + 'static>> {
     let msg_body = event.into_body();
     println!("{:?}", msg_body);
 
@@ -83,16 +83,16 @@ fn process_event(event: Request, _context: Context) -> Result<impl IntoResponse,
     Ok(Response::builder().status(200).body("").unwrap())
 }
 
-fn handle_inline_query(update: &TelegramUpdate) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+fn handle_inline_query(
+    update: &TelegramUpdate,
+) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     let q = update.inline_query.as_ref().unwrap();
 
     if q.query.len() == 0 {
         return Ok(());
     }
 
-    let pool = DB_POOL
-        .get()
-        .ok_or("oops")?;
+    let pool = DB_POOL.get().ok_or("oops")?;
     let conn = pool.get();
 
     // let results = sticker_search(&q.query, "name", 1).unwrap();
