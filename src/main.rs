@@ -73,7 +73,7 @@ fn process_event(
     let update = maybe_update.expect("Unsupported content type of HTTP body.");
 
     if update.inline_query.is_some() {
-        handle_inline_query(&update); // todo handle error
+        handle_inline_query(&update)?; // todo handle error
     }
 
     if update.message.is_some() {
