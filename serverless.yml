@@ -1,4 +1,4 @@
-service: scryfall-telegram
+service: sticker-booru
 provider:
   name: aws
   runtime: rust
@@ -22,7 +22,7 @@ functions:
     # handler value syntax is `{cargo-package-name}.{bin-name}`
     # or `{cargo-package-name}` for short when you are building a
     # default bin for a given package.
-    handler: scryfall-telegram-rs-serverless
+    handler: sticker-booru-rs-serverless
     events:
       - http:
           path: /${env:WEBHOOK_SECRET}
