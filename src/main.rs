@@ -39,9 +39,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         .map_err(|_| "failed to initialise DB pool")?;
 
     match platform {
-        platform::Platform::Lambda => lambda!(|e, c| process_event(e, c)
-            .map_err(|e| failure::Error::from_boxed_compat(e).compat())
-            .handler_error()),
+        platform::Platform::Lambda => lambda!(|e, c| {
+            process_event(e, c)
+                .map_err(|e| failure::Error::from_boxed_compat(e).compat())
+                .handler_error()
+        }),
         _ => unimplemented!(),
         // _ => println!(
         //     "{:?}",
