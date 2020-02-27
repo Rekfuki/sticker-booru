@@ -1,17 +1,14 @@
 #![allow(dead_code, unused_variables, unused_imports, unreachable_code)]
 use std::error::Error;
 
+use anyhow::Context;
 use diesel::pg::PgConnection;
 use failure::{Backtrace, Context as _, Fail, ResultExt};
-use lambda_http::{lambda, Body, IntoResponse, Request, Response};
-use lambda_runtime::{
-    error::{HandlerError, LambdaResultExt},
-    Context,
-};
+use http::Response;
 use once_cell::sync::OnceCell;
 use r2d2_diesel::ConnectionManager;
 use regex::Regex;
-use serde_json;
+use serde_json::Value;
 use std::time::Duration;
 use telegram::{
     inbound::{MessageEntityType, TelegramUpdate},
@@ -25,84 +22,64 @@ mod telegram;
 
 static DB_POOL: OnceCell<r2d2::Pool<ConnectionManager<PgConnection>>> = OnceCell::new();
 
-fn main() -> Result<(), Box<dyn Error>> {
+// let postgres_uri = platform.get_database_config()?.as_diesel_uri();
+// let manager = ConnectionManager::<PgConnection>::new(postgres_uri);
+// let pool = r2d2::Pool::builder()
+//     .connection_timeout(Duration::from_secs(1))
+//     .build(manager)
+//     .expect("Failed to create pool.");
+// DB_POOL
+//     .set(pool)
+//     .map_err(|_| "failed to initialise DB pool")?;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let platform = platform::Platform::Local;
 
-    let postgres_uri = platform.get_database_config()?.as_diesel_uri();
-    let manager = ConnectionManager::<PgConnection>::new(postgres_uri);
-    let pool = r2d2::Pool::builder()
-        .connection_timeout(Duration::from_secs(1))
-        .build(manager)
-        .expect("Failed to create pool.");
-    DB_POOL
-        .set(pool)
-        .map_err(|_| "failed to initialise DB pool")?;
-
-    match platform {
-        platform::Platform::Lambda => lambda!(|e, c| {
-            process_event(e, c)
-                .map_err(|e| failure::Error::from_boxed_compat(e).compat())
-                .handler_error()
-        }),
+    let result = match platform {
+        platform::Platform::Lambda => lambda::run(lambda::handler_fn(process_event)),
         _ => unimplemented!(),
-        // _ => println!(
-        //     "{:?}",
-        //     DB_POOL
-        //         .get()?
-        //         .get()?
-        //         .build_transaction()
-        //         .read_only()
-        //         .serializable()
-        //         .deferrable()
-        //         .run(|| Ok(()))
-        // ),
+    }
+    .await;
+    match result {
+        Ok(response) => response,
+        Err(err) => anyhow::bail!(err),
     }
 
     Ok(())
 }
 
-fn process_event(
-    event: Request,
-    _context: Context,
-) -> Result<impl IntoResponse, Box<dyn Error + Send + Sync + 'static>> {
-    let msg_body = event.into_body();
-    println!("{:?}", msg_body);
+async fn process_event(event: Value) -> anyhow::Result<Value> {
+    // println!("{:?}", msg_body);
 
-    let maybe_update: Option<TelegramUpdate> = match msg_body {
-        Body::Text(e) => Some(serde_json::from_str(&e).unwrap()),
-        _ => None,
-    };
-    let update = maybe_update.expect("Unsupported content type of HTTP body.");
+    let update: TelegramUpdate = serde_json::from_value(event).unwrap();
 
     if update.inline_query.is_some() {
-        handle_inline_query(&update)?; // todo handle error
+        handle_inline_query(&update).await?; // todo handle error
     }
 
     if update.message.is_some() {
-        handle_message(&update);
+        handle_message(&update).await?;
     }
 
-    Ok(Response::builder().status(200).body("").unwrap())
+    Ok(Value::default())
 }
 
-fn handle_inline_query(
-    update: &TelegramUpdate,
-) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+async fn handle_inline_query(update: &TelegramUpdate) -> anyhow::Result<()> {
     let q = update.inline_query.as_ref().unwrap();
 
     if q.query.len() == 0 {
         return Ok(());
     }
 
-    let pool = DB_POOL.get().ok_or("oops")?;
+    let pool = DB_POOL.get().context("failed to get pool")?;
     let conn = pool.get();
 
     // let results = sticker_search(&q.query, "name", 1).unwrap();
     // let results = unimplemented!();
     let results = Vec::new();
     let response = convert::search_results_to_inline_query_response(q.id.clone(), results);
-    telegram::api::answer_inline_query(&response);
-    Ok(())
+    telegram::api::answer_inline_query(&response).await
 }
 
 #[derive(Fail)]
@@ -118,20 +95,20 @@ impl std::fmt::Debug for HandleMessageError {
     }
 }
 
-fn handle_message(update: &TelegramUpdate) {
+async fn handle_message(update: &TelegramUpdate) -> anyhow::Result<()> {
     let msg = update.message.as_ref().unwrap();
 
     // Handle any [[ ]] references before checking for commands etc.
-    handle_plaintext(update);
+    handle_plaintext(update).await?;
 
     if msg.entities.is_none() {
-        return;
+        return Ok(());
     }
 
     let entities = msg.entities.as_ref().unwrap();
 
     if entities.len() == 0 {
-        return;
+        return Ok(());
     }
 
     let msg_text = msg.text.as_ref().unwrap();
@@ -168,19 +145,20 @@ If you have a great idea, feature request, or bug report, feel free to [open an 
 - The code for this bot is licensed under the [MIT License](https://github.com/OliverHofkens/scryfall-telegram-rs-serverless/blob/master/LICENSE), so you're free to change it!
 - I am in no way associated or affiliated with Scryfall, I just use [their fantastic, public API](https://scryfall.com/docs/api).
                 ".to_string(),
-            });
+            }).await?;
         } else {
             println!("Unsupported command: {}", command_txt);
         }
     }
+    Ok(())
 }
 
-fn handle_plaintext(update: &TelegramUpdate) {
+async fn handle_plaintext(update: &TelegramUpdate) -> anyhow::Result<()> {
     let msg = &update.message.as_ref().unwrap();
     let msg_text = msg.text.to_owned();
 
     if msg_text.is_none() {
-        return;
+        return Ok(());
     }
     let msg_text = msg_text.unwrap();
 
@@ -192,7 +170,7 @@ fn handle_plaintext(update: &TelegramUpdate) {
         .collect();
 
     if results.len() == 0 {
-        return;
+        return Ok(());
     }
 
     if results.len() == 1 {
@@ -201,7 +179,8 @@ fn handle_plaintext(update: &TelegramUpdate) {
             photo: results[0].to_owned(),
             caption: None,
             parse_mode: None,
-        });
+        })
+        .await
     } else {
         telegram::api::send_multi_photo(&SendMediaGroup {
             chat_id: msg.chat.id.clone(),
@@ -215,5 +194,6 @@ fn handle_plaintext(update: &TelegramUpdate) {
                 })
                 .collect(),
         })
+        .await
     }
 }
