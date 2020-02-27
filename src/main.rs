@@ -75,7 +75,11 @@ where
     Fut: Future<Output = anyhow::Result<Value>>,
 {
     let err = lambda::run(lambda::handler_fn(process_event)).await;
-    err;
+    match err {
+        Ok(()) => (),
+        Err(err) => anyhow::bail!(err),
+    }
+
     Ok(())
 }
 
