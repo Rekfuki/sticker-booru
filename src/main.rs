@@ -9,11 +9,13 @@ use once_cell::sync::OnceCell;
 use r2d2_diesel::ConnectionManager;
 use regex::Regex;
 use serde_json::Value;
+use std::future::Future;
 use std::time::Duration;
 use telegram::{
     inbound::{MessageEntityType, TelegramUpdate},
     outbound::{InputMediaPhoto, ParseMode, SendMediaGroup, SendMessage, SendPhoto},
 };
+use warp::Filter;
 
 mod convert;
 mod db;
@@ -37,15 +39,35 @@ async fn main() -> anyhow::Result<()> {
     let platform = platform::Platform::Local;
 
     let result = match platform {
-        platform::Platform::Lambda => lambda::run(lambda::handler_fn(process_event)),
-        _ => unimplemented!(),
-    }
-    .await;
+        platform::Platform::Lambda => serve_lambda(process_event).await,
+        _ => serve_local(process_event).await,
+    };
     match result {
         Ok(response) => response,
         Err(err) => anyhow::bail!(err),
     }
 
+    Ok(())
+}
+
+async fn serve_lambda<Fut>(handler: fn(Value) -> Fut) -> anyhow::Result<()>
+where
+    Fut: Future<Output = anyhow::Result<Value>>,
+{
+    let err = lambda::run(lambda::handler_fn(process_event)).await;
+    err;
+    Ok(())
+}
+
+async fn serve_local<Fut>(handler: fn(Value) -> Fut) -> anyhow::Result<()>
+where
+    Fut: Future<Output = anyhow::Result<Value>>,
+{
+    // handler(Value::default()).await
+
+    let hello = warp::path!("hello" / Value).map_async(|body| async move { handler(body).await });
+
+    warp::serve(hello).run(([127, 0, 0, 1], 3030)).await;
     Ok(())
 }
 
