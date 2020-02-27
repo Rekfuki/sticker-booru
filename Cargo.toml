@@ -17,6 +17,6 @@ r2d2-diesel = "1.0.0"
 anyhow = "1.0.26"
 failure = "0.1.6"
 tokio = { version = "0.2.11", features = ["macros"] }
-reqwest = "0.10.3"
+reqwest = { version = "0.10.3", features = ["json"] }
 http = "0.2.0"
 warp = { git = "https://github.com/cjbassi/warp", branch = "error" }
