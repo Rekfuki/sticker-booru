@@ -17,7 +17,7 @@ pub struct DBConfig {
 }
 
 impl DBConfig {
-    pub fn as_diesel_uri(self) -> String {
+    pub fn as_uri(self) -> String {
         format!(
             "postgres://{user}:{secret}@{host}:{port}/{database}",
             user = self.user,

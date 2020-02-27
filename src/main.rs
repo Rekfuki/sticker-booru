@@ -1,15 +1,24 @@
 #![allow(dead_code, unused_variables, unused_imports, unreachable_code)]
-use std::error::Error;
+mod convert;
+mod db;
+mod platform;
+mod telegram;
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
+use bb8_postgres::{
+    bb8::{Pool, RunError},
+    PostgresConnectionManager,
+};
 use diesel::pg::PgConnection;
 use failure::{Backtrace, Context as _, Fail, ResultExt};
 use http::Response;
 use once_cell::sync::OnceCell;
-use r2d2_diesel::ConnectionManager;
+use platform::Platform;
 use regex::Regex;
 use serde_json::Value;
+use std::error::Error;
 use std::future::Future;
+use std::str::FromStr;
 use std::time::Duration;
 use telegram::{
     inbound::{MessageEntityType, TelegramUpdate},
@@ -17,12 +26,9 @@ use telegram::{
 };
 use warp::Filter;
 
-mod convert;
-mod db;
-mod platform;
-mod telegram;
-
-static DB_POOL: OnceCell<r2d2::Pool<ConnectionManager<PgConnection>>> = OnceCell::new();
+static DB_POOL: OnceCell<
+    bb8::Pool<bb8_postgres::PostgresConnectionManager<tokio_postgres::tls::NoTls>>,
+> = OnceCell::new();
 
 // let postgres_uri = platform.get_database_config()?.as_diesel_uri();
 // let manager = ConnectionManager::<PgConnection>::new(postgres_uri);
@@ -37,18 +43,38 @@ static DB_POOL: OnceCell<r2d2::Pool<ConnectionManager<PgConnection>>> = OnceCell
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let platform = platform::Platform::Local;
+    let postgres_uri = platform.get_database_config()?.as_uri();
 
-    let result = match platform {
-        platform::Platform::Lambda => serve_lambda(process_event).await,
-        _ => serve_local(process_event).await,
+    let config =
+        tokio_postgres::config::Config::from_str("postgresql://postgres:docker@localhost:5432")
+            .unwrap();
+    let pg_mgr = PostgresConnectionManager::new(config, tokio_postgres::NoTls);
+
+    let pool = match Pool::builder().build(pg_mgr).await {
+        Ok(pool) => pool,
+        Err(e) => panic!("builder error: {:?}", e),
     };
-    match result {
-        Ok(response) => response,
-        Err(err) => anyhow::bail!(err),
-    }
 
-    Ok(())
+    DB_POOL
+        .set(pool)
+        .map_err(|_| anyhow!("failed to initialise DB pool"))
 }
+
+// #[tokio::main]
+// async fn main() -> anyhow::Result<()> {
+//     let platform = platform::Platform::Local;
+
+//     let result = match platform {
+//         platform::Platform::Lambda => serve_lambda(process_event).await,
+//         _ => serve_local(process_event).await,
+//     };
+//     match result {
+//         Ok(response) => response,
+//         Err(err) => anyhow::bail!(err),
+//     }
+
+//     Ok(())
+// }
 
 async fn serve_lambda<Fut>(handler: fn(Value) -> Fut) -> anyhow::Result<()>
 where

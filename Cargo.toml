@@ -20,3 +20,6 @@ tokio = { version = "0.2.11", features = ["macros"] }
 reqwest = { version = "0.10.3", features = ["json"] }
 http = "0.2.0"
 warp = { git = "https://github.com/cjbassi/warp", branch = "error" }
+bb8 = "0.4.0"
+tokio-postgres = "0.5.2"
+bb8-postgres = "0.4.0"
