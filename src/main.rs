@@ -11,7 +11,6 @@ use bb8_postgres::{
 };
 use diesel::pg::PgConnection;
 use failure::{Backtrace, Context as _, Fail, ResultExt};
-use http::Response;
 use once_cell::sync::OnceCell;
 use platform::Platform;
 use regex::Regex;
@@ -57,24 +56,19 @@ async fn main() -> anyhow::Result<()> {
 
     DB_POOL
         .set(pool)
-        .map_err(|_| anyhow!("failed to initialise DB pool"))
+        .map_err(|_| anyhow!("failed to initialise DB pool"))?;
+
+    let result = match platform {
+        platform::Platform::Lambda => serve_lambda(process_event).await,
+        _ => serve_local(process_event).await,
+    };
+    match result {
+        Ok(()) => (),
+        Err(err) => anyhow::bail!(err),
+    }
+
+    Ok(())
 }
-
-// #[tokio::main]
-// async fn main() -> anyhow::Result<()> {
-//     let platform = platform::Platform::Local;
-
-//     let result = match platform {
-//         platform::Platform::Lambda => serve_lambda(process_event).await,
-//         _ => serve_local(process_event).await,
-//     };
-//     match result {
-//         Ok(response) => response,
-//         Err(err) => anyhow::bail!(err),
-//     }
-
-//     Ok(())
-// }
 
 async fn serve_lambda<Fut>(handler: fn(Value) -> Fut) -> anyhow::Result<()>
 where
@@ -87,11 +81,18 @@ where
 
 async fn serve_local<Fut>(handler: fn(Value) -> Fut) -> anyhow::Result<()>
 where
-    Fut: Future<Output = anyhow::Result<Value>>,
+    Fut: Future<Output = anyhow::Result<Value>> + Send + 'static,
 {
-    // handler(Value::default()).await
-
-    let hello = warp::path!("hello" / Value).map_async(|body| async move { handler(body).await });
+    let hello = warp::path!("hello" / Value).map_async(move |body| async move {
+        let result: Box<dyn warp::reply::Reply> = match handler(body).await {
+            Ok(v) => Box::new(warp::reply::json(&v)),
+            Err(e) => Box::new(warp::reply::with_status(
+                warp::http::Response::new(e.to_string()),
+                http::status::StatusCode::INTERNAL_SERVER_ERROR,
+            )),
+        };
+        result
+    });
 
     warp::serve(hello).run(([127, 0, 0, 1], 3030)).await;
     Ok(())
