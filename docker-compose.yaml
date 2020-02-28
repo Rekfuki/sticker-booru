@@ -1,0 +1,16 @@
+version: '3.7'
+
+volumes:
+  postgres:
+    driver: local
+
+services:
+  postgres:
+    image: postgres:11.5-alpine
+    restart: always
+    ports:
+      - 127.0.0.1:${POSTGRES_PORT:-5432}:5432
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
