@@ -31,10 +31,7 @@ static DB_POOL: OnceCell<
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let platform = match std::env::var("LAMBDA_TASK_ROOT") {
-        Ok(_) => platform::Platform::Lambda,
-        Err(_) => platform::Platform::Local,
-    };
+    let platform = platform::Platform::autodetect();
     let postgres_uri = platform.get_database_config()?.as_uri();
 
     let config = tokio_postgres::config::Config::from_str(&postgres_uri).unwrap();
@@ -49,42 +46,7 @@ async fn main() -> anyhow::Result<()> {
         .set(pool)
         .map_err(|_| anyhow!("failed to initialise DB pool"))?;
 
-    match platform {
-        platform::Platform::Lambda => serve_lambda(process_event).await,
-        _ => serve_local(process_event).await,
-    }
-}
-
-async fn serve_lambda<Fut>(handler: fn(Value) -> Fut) -> anyhow::Result<()>
-where
-    Fut: Future<Output = anyhow::Result<Value>>,
-{
-    let result = lambda::run(lambda::handler_fn(process_event)).await;
-    match result {
-        Ok(()) => (),
-        Err(err) => anyhow::bail!(err),
-    }
-
-    Ok(())
-}
-
-async fn serve_local<Fut>(handler: fn(Value) -> Fut) -> anyhow::Result<()>
-where
-    Fut: Future<Output = anyhow::Result<Value>> + Send + 'static,
-{
-    let hello = warp::path!("hello" / Value).map_async(move |body| async move {
-        let result: Box<dyn warp::reply::Reply> = match handler(body).await {
-            Ok(v) => Box::new(warp::reply::json(&v)),
-            Err(e) => Box::new(warp::reply::with_status(
-                warp::http::Response::new(e.to_string()),
-                warp::http::status::StatusCode::INTERNAL_SERVER_ERROR,
-            )),
-        };
-        result
-    });
-
-    warp::serve(hello).run(([127, 0, 0, 1], 3030)).await;
-    Ok(())
+    platform.serve(process_event).await
 }
 
 async fn process_event(event: Value) -> anyhow::Result<Value> {
