@@ -21,7 +21,7 @@ impl Platform {
             };
 
             let user = get_config_string("POSTGRES_USER")?;
-            let secret = get_config_string("POSTGRES_SECRET")?;
+            let password = get_config_string("POSTGRES_PASSWORD")?;
             let host = get_config_string("POSTGRES_HOST")?;
             let port = get_config_string("POSTGRES_PORT")?;
             let port = str::parse(&port)
@@ -29,7 +29,7 @@ impl Platform {
             let database = get_config_string("POSTGRES_DATABASE")?;
             Ok(DBConfig {
                 user,
-                secret,
+                password,
                 host,
                 port,
                 database,
