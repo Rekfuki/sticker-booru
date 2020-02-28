@@ -10,7 +10,6 @@ use bb8_postgres::{
     PostgresConnectionManager,
 };
 use diesel::pg::PgConnection;
-use failure::{Backtrace, Context as _, Fail, ResultExt};
 use once_cell::sync::OnceCell;
 use platform::Platform;
 use regex::Regex;
@@ -37,10 +36,10 @@ async fn main() -> anyhow::Result<()> {
     let config = tokio_postgres::config::Config::from_str(&postgres_uri).unwrap();
     let pg_mgr = PostgresConnectionManager::new(config, tokio_postgres::NoTls);
 
-    let pool = match Pool::builder().build(pg_mgr).await {
-        Ok(pool) => pool,
-        Err(e) => panic!("builder error: {:?}", e),
-    };
+    let pool = Pool::builder()
+        .build(pg_mgr)
+        .await
+        .context("pool builder error")?;
 
     DB_POOL
         .set(pool)
@@ -80,19 +79,6 @@ async fn handle_inline_query(update: &TelegramUpdate) -> anyhow::Result<()> {
     let results = Vec::new();
     let response = convert::search_results_to_inline_query_response(q.id.clone(), results);
     telegram::api::answer_inline_query(&response).await
-}
-
-#[derive(Fail)]
-enum HandleMessageError {
-    #[fail(display = "Failed to get the DB pool")]
-    CouldNotGetPool,
-}
-
-// redirect to Display so main understands it
-impl std::fmt::Debug for HandleMessageError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
-    }
 }
 
 async fn handle_message(update: &TelegramUpdate) -> anyhow::Result<()> {
