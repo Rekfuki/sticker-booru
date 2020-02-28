@@ -58,24 +58,18 @@ async fn main() -> anyhow::Result<()> {
         .set(pool)
         .map_err(|_| anyhow!("failed to initialise DB pool"))?;
 
-    let result = match platform {
+    match platform {
         platform::Platform::Lambda => serve_lambda(process_event).await,
         _ => serve_local(process_event).await,
-    };
-    match result {
-        Ok(()) => (),
-        Err(err) => anyhow::bail!(err),
     }
-
-    Ok(())
 }
 
 async fn serve_lambda<Fut>(handler: fn(Value) -> Fut) -> anyhow::Result<()>
 where
     Fut: Future<Output = anyhow::Result<Value>>,
 {
-    let err = lambda::run(lambda::handler_fn(process_event)).await;
-    match err {
+    let result = lambda::run(lambda::handler_fn(process_event)).await;
+    match result {
         Ok(()) => (),
         Err(err) => anyhow::bail!(err),
     }
