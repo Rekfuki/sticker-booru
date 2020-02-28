@@ -41,7 +41,10 @@ static DB_POOL: OnceCell<
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let platform = platform::Platform::Local;
+    let platform = match std::env::var("LAMBDA_TASK_ROOT") {
+        Ok(_) => platform::Platform::Lambda,
+        Err(_) => platform::Platform::Local,
+    };
     let postgres_uri = platform.get_database_config()?.as_uri();
 
     let config =
