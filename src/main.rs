@@ -47,9 +47,7 @@ async fn main() -> anyhow::Result<()> {
     };
     let postgres_uri = platform.get_database_config()?.as_uri();
 
-    let config =
-        tokio_postgres::config::Config::from_str("postgresql://postgres:docker@localhost:5432")
-            .unwrap();
+    let config = tokio_postgres::config::Config::from_str(&postgres_uri).unwrap();
     let pg_mgr = PostgresConnectionManager::new(config, tokio_postgres::NoTls);
 
     let pool = match Pool::builder().build(pg_mgr).await {
