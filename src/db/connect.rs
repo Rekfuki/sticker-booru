@@ -10,7 +10,7 @@ use std::env;
 
 pub struct DBConfig {
     pub user: String,
-    pub secret: String,
+    pub password: String,
     pub database: String,
     pub host: String,
     pub port: i32,
@@ -19,9 +19,9 @@ pub struct DBConfig {
 impl DBConfig {
     pub fn as_uri(self) -> String {
         format!(
-            "postgres://{user}:{secret}@{host}:{port}/{database}",
+            "postgres://{user}:{password}@{host}:{port}/{database}",
             user = self.user,
-            secret = self.secret,
+            password = self.password,
             host = self.host,
             port = self.port,
             database = self.database,
