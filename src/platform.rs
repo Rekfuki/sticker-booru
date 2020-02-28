@@ -47,9 +47,11 @@ impl Platform {
         }
     }
 
-    pub async fn serve<Fut>(self, handler: fn(Value) -> Fut) -> anyhow::Result<()>
+    pub async fn serve<I, O, Fut>(self, handler: fn(I) -> Fut) -> anyhow::Result<()>
     where
-        Fut: Future<Output = anyhow::Result<Value>> + Send + 'static,
+        I: DeserializeOwned + Send + 'static,
+        O: Serialize + Send + 'static,
+        Fut: Future<Output = anyhow::Result<O>> + Send + 'static,
     {
         match self {
             Self::Lambda => {
