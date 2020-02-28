@@ -77,7 +77,7 @@ impl Platform {
                     },
                 );
 
-                warp::serve(endpoint).run(([127, 0, 0, 1], 3030)).await;
+                warp::serve(endpoint).run(([0, 0, 0, 0], 1337)).await;
                 Ok(())
             }
         }
