@@ -62,7 +62,9 @@ impl Platform {
                 Ok(())
             }
             Self::Local => {
-                let hello = warp::path!("hello" / Value).map_async(move |body| async move {
+                let hello = warp::path!("hello")
+                .and(warp::body::json())
+                .map_async(move |body| async move {
                     let result: Box<dyn warp::reply::Reply> = match handler(body).await {
                         Ok(v) => Box::new(warp::reply::json(&v)),
                         Err(e) => Box::new(warp::reply::with_status(
