@@ -48,10 +48,8 @@ async fn main() -> anyhow::Result<()> {
     platform.serve(process_event).await
 }
 
-async fn process_event(event: Value) -> anyhow::Result<Value> {
+async fn process_event(update: TelegramUpdate) -> anyhow::Result<Value> {
     // println!("{:?}", msg_body);
-
-    let update: TelegramUpdate = serde_json::from_value(event).unwrap();
 
     if update.inline_query.is_some() {
         handle_inline_query(&update).await?; // todo handle error
