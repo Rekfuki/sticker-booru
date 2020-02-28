@@ -64,20 +64,20 @@ impl Platform {
                 Ok(())
             }
             Self::Local => {
-                let hello = warp::path!("hello")
-                .and(warp::body::json())
-                .map_async(move |body| async move {
-                    let result: Box<dyn warp::reply::Reply> = match handler(body).await {
-                        Ok(v) => Box::new(warp::reply::json(&v)),
-                        Err(e) => Box::new(warp::reply::with_status(
-                            warp::http::Response::new(e.to_string()),
-                            warp::http::status::StatusCode::INTERNAL_SERVER_ERROR,
-                        )),
-                    };
-                    result
-                });
+                let endpoint = warp::path!("handle").and(warp::body::json()).map_async(
+                    move |body| async move {
+                        let result: Box<dyn warp::reply::Reply> = match handler(body).await {
+                            Ok(v) => Box::new(warp::reply::json(&v)),
+                            Err(e) => Box::new(warp::reply::with_status(
+                                warp::http::Response::new(e.to_string()),
+                                warp::http::status::StatusCode::INTERNAL_SERVER_ERROR,
+                            )),
+                        };
+                        result
+                    },
+                );
 
-                warp::serve(hello).run(([127, 0, 0, 1], 3030)).await;
+                warp::serve(endpoint).run(([127, 0, 0, 1], 3030)).await;
                 Ok(())
             }
         }
