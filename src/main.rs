@@ -29,16 +29,6 @@ static DB_POOL: OnceCell<
     bb8::Pool<bb8_postgres::PostgresConnectionManager<tokio_postgres::tls::NoTls>>,
 > = OnceCell::new();
 
-// let postgres_uri = platform.get_database_config()?.as_diesel_uri();
-// let manager = ConnectionManager::<PgConnection>::new(postgres_uri);
-// let pool = r2d2::Pool::builder()
-//     .connection_timeout(Duration::from_secs(1))
-//     .build(manager)
-//     .expect("Failed to create pool.");
-// DB_POOL
-//     .set(pool)
-//     .map_err(|_| "failed to initialise DB pool")?;
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let platform = match std::env::var("LAMBDA_TASK_ROOT") {
