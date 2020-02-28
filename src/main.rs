@@ -77,7 +77,7 @@ where
             Ok(v) => Box::new(warp::reply::json(&v)),
             Err(e) => Box::new(warp::reply::with_status(
                 warp::http::Response::new(e.to_string()),
-                http::status::StatusCode::INTERNAL_SERVER_ERROR,
+                warp::http::status::StatusCode::INTERNAL_SERVER_ERROR,
             )),
         };
         result
