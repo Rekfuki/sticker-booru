@@ -1,7 +1,7 @@
 use crate::db::connect::DBConfig;
 use anyhow::Context;
 use serde::{de::DeserializeOwned, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::env;
 use std::error::Error as StdError;
 use std::fmt;
@@ -70,7 +70,9 @@ impl Platform {
                         let result: Box<dyn warp::reply::Reply> = match handler(body).await {
                             Ok(v) => Box::new(warp::reply::json(&v)),
                             Err(e) => Box::new(warp::reply::with_status(
-                                warp::http::Response::new(e.to_string()),
+                                warp::http::Response::new(
+                                    json!({ "error": e.to_string() }).to_string() + "\n",
+                                ),
                                 warp::http::status::StatusCode::INTERNAL_SERVER_ERROR,
                             )),
                         };
