@@ -113,21 +113,19 @@ async fn handle_message(update: &TelegramUpdate) -> anyhow::Result<()> {
                 chat_id: msg.chat.id.clone(),
                 parse_mode: Some(ParseMode::Markdown),
                 disable_web_page_preview: Some(true),
-                text: "Welcome to ScryfallBot!
+                text: "Welcome to StickerBooruBot!
 
 *Usage*
-ScryfallBot works in both _inline_ mode and in active mode.
-Inline mode means you just tag @ScryfallBot and start typing while the results show up above your keyboard.
-Tapping a result will send it in your chat. All Scryfall syntax is supported, for a full overview, see [the Scryfall syntax docs](https://scryfall.com/docs/syntax)
-Active mode means you can add ScryfallBot to a chat and look up cards by typing [[ your card here ]] in chat.
-
+StickerBooruBot works in both _inline_ mode and in active mode.
+Inline mode means you just tag @StickerBooruBot and start typing while the results show up above your keyboard.
+Tapping a result will send it in your chat.
 *Questions, Improvements, Changes*
-ScryfallBot is open source and lives on [Github here](https://github.com/OliverHofkens/scryfall-telegram-rs-serverless).
-If you have a great idea, feature request, or bug report, feel free to [open an issue here](https://github.com/OliverHofkens/scryfall-telegram-rs-serverless/issues)
+StickerBooruBot is open source and lives on [Github here](https://github.com/Rekfuki/sticker-booru).
+It was originally forked from ScryfallBot, [Github here](https://github.com/OliverHofkens/scryfall-telegram-rs-serverless).
+If you have a great idea, feature request, or bug report, feel free to [open an issue here](https://github.com/Rekfuki/sticker-booru/issues)
 
 *Legal stuff*
-- The code for this bot is licensed under the [MIT License](https://github.com/OliverHofkens/scryfall-telegram-rs-serverless/blob/master/LICENSE), so you're free to change it!
-- I am in no way associated or affiliated with Scryfall, I just use [their fantastic, public API](https://scryfall.com/docs/api).
+- The code for this bot is licensed under the [MIT License](https://github.com/Rekfuki/sticker-booru/blob/master/LICENSE), so you're free to change it!
                 ".to_string(),
             }).await?;
         } else {
